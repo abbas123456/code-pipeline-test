@@ -5,3 +5,4 @@ phases:
     commands:
       - docker build .
       - python -m unittest test_domain
+      - python main.py
