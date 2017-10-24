@@ -140,22 +140,7 @@ def main():
         TaskRoleArn=Ref("ECSTaskRole"),
         ContainerDefinitions=[ecs.ContainerDefinition(
             Name="SimpleServer",
-            Cpu=0,
             Image="abbas123456/simple-server:latest",
-            Memory=1024,
-            Ulimits=[ecs.Ulimit(
-                HardLimit=8192,
-                SoftLimit=8192,
-                Name="nofile"
-            )],
-            LogConfiguration=ecs.LogConfiguration(
-                LogDriver="splunk",
-                Options={"splunk-url":Ref("SplunkUrl"),
-                       "splunk-token":Ref("SplunkToken"),
-                       "splunk-index":Ref("SplunkIndex"),
-                       "tag":"{{.ImageName}}/{{.Name}}",
-                       "splunk-insecureskipverify":"true"}
-            ),
             PortMappings=[ecs.PortMapping(
                 ContainerPort=8000
             )],
