@@ -1,0 +1,292 @@
+{
+    "Resources": {
+        "EC2Instance": {
+            "Properties": {
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "ImageId": "ami-13f7226a",
+                "InstanceType": "t2.micro",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ECSInstanceSecurityGroup"
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                {
+                                    "Fn::Sub": "#!/bin/bash -xe\n"
+                                },
+                                {
+                                    "Fn::Sub": "\n"
+                                },
+                                {
+                                    "Fn::Sub": "echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config\n"
+                                }
+                            ]
+                        ]
+                    }
+                }
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "EC2InstanceProfile": {
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::InstanceProfile"
+        },
+        "EC2InstanceRole": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "ecs:CreateCluster",
+                                        "ecs:DeregisterContainerInstance",
+                                        "ecs:DiscoverPollEndpoint",
+                                        "ecs:Poll",
+                                        "ecs:RegisterContainerInstance",
+                                        "ecs:StartTelemetrySession",
+                                        "ecr:GetAuthorizationToken",
+                                        "ecr:BatchGetImage",
+                                        "ecr:GetDownloadUrlForLayer",
+                                        "ecs:Submit*",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "ec2:DescribeTags",
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ],
+                            "Version": "2012-10-17"
+                        },
+                        "PolicyName": "ecs-service"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Role"
+        },
+        "ECSCluster": {
+            "Properties": {
+                "ClusterName": "WorldCheckCluster"
+            },
+            "Type": "AWS::ECS::Cluster"
+        },
+        "ECSInstanceSecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Security group for NameMatcher instances",
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "0",
+                        "IpProtocol": "tcp",
+                        "ToPort": "65535"
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "ECSService": {
+            "DependsOn": "LoadBalancerListener",
+            "Properties": {
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "DesiredCount": 1,
+                "LoadBalancers": [
+                    {
+                        "ContainerName": "SimpleServer",
+                        "ContainerPort": 8000,
+                        "TargetGroupArn": {
+                            "Ref": "ECSTargetGroup"
+                        }
+                    }
+                ],
+                "Role": {
+                    "Ref": "ECSServiceSchedulerRole"
+                },
+                "TaskDefinition": {
+                    "Ref": "ECSTaskDefinition"
+                }
+            },
+            "Type": "AWS::ECS::Service"
+        },
+        "ECSServiceSchedulerRole": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ecs.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "ec2:Describe*",
+                                        "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                                        "elasticloadbalancing:DeregisterTargets",
+                                        "elasticloadbalancing:Describe*",
+                                        "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                                        "elasticloadbalancing:RegisterTargets"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ],
+                            "Version": "2012-10-17"
+                        },
+                        "PolicyName": "ecs-service"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Role"
+        },
+        "ECSTargetGroup": {
+            "Properties": {
+                "Port": 8000,
+                "Protocol": "HTTP",
+                "VpcId": "vpc-925497f6"
+            },
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup"
+        },
+        "ECSTaskDefinition": {
+            "Properties": {
+                "ContainerDefinitions": [
+                    {
+                        "Cpu": 0,
+                        "Image": "abbas123456/simple-server:latest",
+                        "LogConfiguration": {
+                            "LogDriver": "splunk",
+                            "Options": {
+                                "splunk-index": {
+                                    "Ref": "SplunkIndex"
+                                },
+                                "splunk-insecureskipverify": "true",
+                                "splunk-token": {
+                                    "Ref": "SplunkToken"
+                                },
+                                "splunk-url": {
+                                    "Ref": "SplunkUrl"
+                                },
+                                "tag": "{{.ImageName}}/{{.Name}}"
+                            }
+                        },
+                        "Memory": 1024,
+                        "Name": "SimpleServer",
+                        "PortMappings": [
+                            {
+                                "ContainerPort": 8000
+                            }
+                        ],
+                        "Ulimits": [
+                            {
+                                "HardLimit": 8192,
+                                "Name": "nofile",
+                                "SoftLimit": 8192
+                            }
+                        ]
+                    }
+                ],
+                "TaskRoleArn": {
+                    "Ref": "ECSTaskRole"
+                }
+            },
+            "Type": "AWS::ECS::TaskDefinition"
+        },
+        "ECSTaskRole": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ecs-tasks.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                }
+            },
+            "Type": "AWS::IAM::Role"
+        },
+        "LoadBalancer": {
+            "Properties": {
+                "SecurityGroups": [
+                    {
+                        "Ref": "ECSInstanceSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    "subnet-a321c8fb",
+                    "subnet-68fa271e",
+                    "subnet-689d350c"
+                ]
+            },
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer"
+        },
+        "LoadBalancerListener": {
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "TargetGroupArn": {
+                            "Ref": "ECSTargetGroup"
+                        },
+                        "Type": "forward"
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "LoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            },
+            "Type": "AWS::ElasticLoadBalancingV2::Listener"
+        }
+    }
+}
