@@ -115,22 +115,11 @@ def main():
     with open("user-data.sh", "r") as f:
         user_data_content = f.readlines()
 
-    template.add_resource(ec2.SecurityGroup(
-        "ECSInstanceSecurityGroup",
-        GroupDescription="Security group for NameMatcher instances",
-        SecurityGroupIngress=[{
-            "IpProtocol":"tcp",
-            "FromPort":"0",
-            "ToPort":"65535",
-            "CidrIp" : "0.0.0.0/0"
-        }],
-    ))
-
     template.add_resource(ec2.Instance(
         "EC2Instance",
         ImageId="ami-13f7226a",
         InstanceType="t2.micro",
-        SecurityGroups=[Ref("ECSInstanceSecurityGroup")],
+        SecurityGroups=["default"],
         UserData=Base64(Join('',[Sub(x) for x in user_data_content])),
         IamInstanceProfile=Ref("EC2InstanceProfile"),
     ))
@@ -140,6 +129,7 @@ def main():
         TaskRoleArn=Ref("ECSTaskRole"),
         ContainerDefinitions=[ecs.ContainerDefinition(
             Name="SimpleServer",
+            Memory="128",
             Image="abbas123456/simple-server:latest",
             PortMappings=[ecs.PortMapping(
                 ContainerPort=8000
@@ -157,7 +147,7 @@ def main():
     template.add_resource(elb.LoadBalancer(
         "LoadBalancer",
         Subnets=["subnet-a321c8fb", "subnet-68fa271e", "subnet-689d350c"],
-        SecurityGroups=[Ref("ECSInstanceSecurityGroup")]
+        SecurityGroups=["sg-0202bd65"]
     ))
 
     template.add_resource(elb.Listener(
